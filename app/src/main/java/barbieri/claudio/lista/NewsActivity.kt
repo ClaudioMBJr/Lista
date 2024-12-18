@@ -1,6 +1,9 @@
 package barbieri.claudio.lista
 
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
@@ -9,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -31,20 +35,22 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import barbieri.claudio.lista.MyImage.Companion.allFieldsFilled
 import barbieri.claudio.lista.ui.theme.ListaTheme
 import coil.compose.rememberAsyncImagePainter
+import java.io.File
+import java.io.FileOutputStream
 
 class NewsActivity : ComponentActivity() {
+
+    private val viewModel: NewsViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,14 +89,12 @@ class NewsActivity : ComponentActivity() {
 
     @Composable
     fun Screen(modifier: Modifier = Modifier) {
-        var imageUri by remember { mutableStateOf<Uri?>(null) }
-        var title by remember { mutableStateOf("") }
-        var description by remember { mutableStateOf("") }
+        val myImage = viewModel.myImage.collectAsStateWithLifecycle().value
 
         val launcher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent()
         ) { uri: Uri? ->
-            imageUri = uri
+            viewModel.updateImage(this.getFileFromUri(uri))
         }
 
         Column(
@@ -99,7 +103,7 @@ class NewsActivity : ComponentActivity() {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            imageUri?.let {
+            myImage.file?.let {
                 Image(
                     painter = rememberAsyncImagePainter(it),
                     contentDescription = null,
@@ -114,8 +118,8 @@ class NewsActivity : ComponentActivity() {
             }
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
+                value = myImage.title,
+                onValueChange = { viewModel.updateTitle(it) },
                 label = { Text("Título") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(
@@ -125,8 +129,8 @@ class NewsActivity : ComponentActivity() {
             )
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
+                value = myImage.description,
+                onValueChange = { viewModel.updateDescription(it) },
                 label = { Text("Descrição") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(
@@ -138,7 +142,7 @@ class NewsActivity : ComponentActivity() {
             HorizontalDivider(modifier, 1.dp, Color.Gray)
             Spacer(Modifier.height(8.dp))
             Button(onClick = {
-                if (title.isBlank() || description.isBlank() || imageUri == null) {
+                if (!myImage.allFieldsFilled()) {
                     Toast.makeText(
                         this@NewsActivity,
                         "É necessário selecionar a imagem e preecher os campos",
@@ -148,11 +152,7 @@ class NewsActivity : ComponentActivity() {
                     val resultIntent = Intent().apply {
                         putExtra(
                             "image",
-                            MyImage(
-                                title = title,
-                                description = description,
-                                uri = imageUri?.toString().orEmpty()
-                            )
+                            myImage
                         )
                     }
                     setResult(RESULT_OK, resultIntent)
@@ -161,6 +161,32 @@ class NewsActivity : ComponentActivity() {
             }) {
                 Text("Adicionar Item")
             }
+        }
+    }
+
+    //Save uri as a file
+    private fun Context.getFileFromUri(uri: Uri?): File? {
+        if (uri == null) return null
+
+        val file = File(this.filesDir, "image.png")
+        val outputStream = FileOutputStream(file)
+        val bitmap = this.getBitmapFromUri(uri)
+
+        if (bitmap == null) return null
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+        outputStream.close()
+
+        return file
+    }
+
+    //Convert uri to a bitmap
+    private fun Context.getBitmapFromUri(uri: Uri): Bitmap? {
+        return try {
+            val inputStream = contentResolver.openInputStream(uri)
+            BitmapFactory.decodeStream(inputStream)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 }

@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,8 +35,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -43,12 +42,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import barbieri.claudio.lista.ui.theme.ListaTheme
 import coil.compose.rememberAsyncImagePainter
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
+
+    private val mainViewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,13 +63,12 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun Screen() {
-        var imageList = remember { mutableStateListOf<MyImage>() }
         val getImageLauncher =
             rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
                 if (result.resultCode == RESULT_OK) {
                     val image = result.data?.getSerializableExtra("image") as? MyImage
                     if (image != null) {
-                        imageList.add(image)
+                        mainViewModel.addImage(image)
                     }
                 }
             }
@@ -102,19 +102,22 @@ class MainActivity : ComponentActivity() {
             },
             floatingActionButtonPosition = FabPosition.End
         ) { innerPadding ->
+
+            val myImages = mainViewModel.myImages.collectAsStateWithLifecycle().value
+
             LazyColumn(
                 modifier = Modifier
                     .padding(innerPadding)
                     .fillMaxSize()
             ) {
-                items(imageList) { myImage ->
+                items(myImages) { myImage ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp)
                     ) {
                         Image(
-                            painter = rememberAsyncImagePainter(myImage.uri.toUri()),
+                            painter = rememberAsyncImagePainter(myImage.file),
                             contentDescription = null,
                             modifier = Modifier
                                 .size(100.dp)
